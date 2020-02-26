@@ -1,11 +1,13 @@
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.Scanner;
 
 /*
@@ -51,59 +53,74 @@ public class Main implements Runnable
 				InputStream ConnectionInput = Connection.getInputStream();
 				byte[] Buffer = new byte[HTTP_REQUEST_MAX_SIZE];
 				int ActualSize = ConnectionInput.read(Buffer);
-
-				String AsString = new String(Buffer);
-				String[] Lines = AsString.split("\r\n");
 				
-
-				// Parse first line of request
-				String[] Line0 = Lines[0].split(" ");
-
-				System.out.println("Line0: " + Lines[0]);
-				
-				String Method = Line0[0];
-				String URI = Line0[1];
-				String Version = Line0[2];
-				String ResponseMessage = Version;
-				
-				// Canonicalize URI if asking for main page
-				if(URI.equals("/"))
-					URI = "/index.html";
-				
-				// Check if we can find the resource
-				String SystemPath = "." + File.separator + "page" + File.separator + URI;
-				File SystemFile = new File(SystemPath);
-				System.out.println("Resource system: " + SystemFile.getAbsolutePath());
-				
-				if(SystemFile.exists())
+				if(ActualSize > 0)
 				{
-					System.out.println("Found resource");
-					String FileAsString = LoadFileAsString(SystemPath);
-					byte[] Data = FileAsString.getBytes();
+					String AsString = new String(Buffer);
+					String[] Lines = AsString.split("\r\n");
 					
-					ResponseMessage += " 200 OK\r\n";
-					ResponseMessage += "Date: Sun, 18 Oct 2012 10:36:20 GMT\r\n";
-					ResponseMessage += "Server: CSE4344-jgl0715\r\n";
-					ResponseMessage += "Content-Length: " + Data.length + "\r\n";
-					ResponseMessage += "Connection: Closed\r\n";
-					ResponseMessage += "Content-Type: text/html; charset=utf-8\r\n";
-					ResponseMessage += FileAsString;
+
+					// Parse first line of request
+					String[] Line0 = Lines[0].split(" ");
+
+					System.out.println("Line0: " + Lines[0]);
 					
-					System.out.println("Sending: " + ResponseMessage);
+					String Method = Line0[0];
+					String URI = Line0[1];
+					String Version = Line0[2];
 					
-					Connection.getOutputStream().write(ResponseMessage.getBytes());
+					// Canonicalize URI if asking for main page
+					if(URI.equals("/"))
+						URI = "/index.html";
+					
+					// Check if we can find the resource
+					String SystemPath = "." + File.separator + "page" + File.separator + URI;
+					File SystemFile = new File(SystemPath);
+					System.out.println("Resource system: " + SystemFile.getAbsolutePath());
+					
+					if(SystemFile.exists())
+					{
+						System.out.println("Found resource");
+						
+						String ContentString = LoadFileAsString(SystemPath);
+						byte[] ContentBytes = ContentString.getBytes("UTF-8");
+						
+						ByteArrayOutputStream BAOut = new ByteArrayOutputStream();
+						OutputStream Output = Connection.getOutputStream();
+						Output.write((Version + " 200 OK\r\n").getBytes("utf-8"));
+						Output.write(("Date: Sun, 18 Oct 2012 10:36:20 GMT\r\n").getBytes("utf-8"));
+						Output.write(("Server: CSE4344-jgl0715\r\n").getBytes("utf-8"));
+						Output.write(("Content-Length: " + ContentBytes.length + "\r\n").getBytes("utf-8"));
+						Output.write(("Connection: closed\r\n").getBytes("utf-8"));
+						Output.write(("Content-Type: text/html; charset=utf-8\r\n\r\n").getBytes("utf-8"));
+						Output.write(ContentBytes);
+						
+//						System.out.println(new String(BAOut.toByteArray(), Charset.forName("utf-8")));
+//						System.out.println(BAOut.toString());
+						
+						System.out.println(Arrays.toString(ContentBytes));
+						System.out.println(ContentString);
+						System.out.println(ContentBytes.length + " vs " + ContentString.length());
+						Connection.getOutputStream().write(BAOut.toByteArray());
+					}
+					else
+					{
+						System.out.println("Did not find resource");
+						OutputStream Output = Connection.getOutputStream();
+						Output.write((Version + " 404 Not Found\r\n").getBytes("utf-8"));
+						Output.write(("Date: Sun, 18 Oct 2012 10:36:20 GMT\r\n").getBytes("utf-8"));
+						Output.write(("Server: CSE4344-jgl0715\r\n").getBytes("utf-8"));
+						Output.write(("Content-Length: 0\r\n").getBytes("utf-8"));
+						Output.write(("Connection: closed\r\n").getBytes("utf-8"));
+						Output.write(("Content-Type: text/html; charset=utf-8\r\n").getBytes("utf-8"));
+					}
+					
+					System.out.println("Method: " + Method);
+					System.out.println("URI: " + URI);
+					System.out.println("Version: " + Version);
 				}
-				else
-				{
-					System.out.println("Did not find resource");
-				}
-				
-				System.out.println("Method: " + Method);
-				System.out.println("URI: " + URI);
-				System.out.println("Version: " + Version);
-				
+
 				Connection.close();
-
 			} catch (IOException e)
 			{
 				System.err.println("A problem occurred while accepting a socket connection");
